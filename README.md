@@ -85,12 +85,25 @@ always-on mode that applies the writing rules to every reply.
 
 Install:
 
+- Any agent with the skills CLI: `npx skills add youngfreezy/unslopify`.
 - Claude Code: copy `SKILL.md` into `~/.claude/skills/unslopify/`,
   then invoke with `/unslopify`.
 - Cursor: paste the rules from SKILL.md Mode 1 into a project or
   user rule, and use the CLI in the terminal for audits.
 - Codex / other: include SKILL.md in the system context and expose
   the `unslopify` CLI.
+
+Using it once installed:
+
+- `/unslopify` followed by pasted text, or by a file path, runs the
+  rewrite pipeline on that draft and returns the clean text plus a
+  short log of findings fixed and the judge's verdict.
+- "use unslopify in every reply" turns on always-on mode for the
+  session: the agent writes under the skill's rules from then on. Put
+  that sentence in a standing rule to make it permanent.
+- The agent shells out to this package's CLI for the audit and the
+  phrase bank, so `pip install unslopify` makes the gates real instead
+  of self-graded.
 
 ## Library
 
