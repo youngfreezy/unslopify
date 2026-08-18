@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "unslopify"
+version = "0.1.0"
+description = "Audit and rewrite text to remove AI-generated writing patterns. Deterministic audit core plus an agent skill for the rewrite loop."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "V2Software.AI" }]
+keywords = ["writing", "ai-detection", "style", "lint", "prose"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = ["pydantic>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/youngfreezy/unslopify"
+Issues = "https://github.com/youngfreezy/unslopify/issues"
+
+[project.scripts]
+unslopify = "unslopify.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/unslopify"]

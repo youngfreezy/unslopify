@@ -1,0 +1,58 @@
+<mxfile host="app.diagrams.net" modified="2026-08-18T00:00:00.000Z" agent="unslopify" version="24.0.0">
+  <diagram id="unslopify-pipeline" name="rewrite-pipeline">
+    <mxGraphModel dx="800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="start" value="Draft in (paste or file)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="320" y="40" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="auditNode" value="Audit: unslopify DRAFT.md --brief&#10;(named types + mechanics)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="300" y="160" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rewriteNode" value="Rewrite against findings&#10;(keep every claim; aim at VoiceProfile)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="300" y="290" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="judgmentNode" value="Judgment pass: meaning loss,&#10;jargon, rhythm the regexes miss" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="300" y="420" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="uniqueNode" value="Uniqueness: unslopify --bank&#10;(8-word cross-doc, 4-word within)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="300" y="550" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="freshJudge" value="Fresh-context judge&#10;(sees only the text; quotes spans)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="300" y="680" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="approvedQ" value="Approved?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="345" y="810" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="finalGate" value="Final gate: unslopify DRAFT.md&#10;must print PASS" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="300" y="950" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="bankCommit" value="unslopify commit --id doc-id&#10;(bank phrasing for future drafts)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="300" y="1080" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="endNode" value="Clean text + JSON audit log" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="320" y="1210" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="start" target="auditNode"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="auditNode" target="rewriteNode"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="rewriteNode" target="judgmentNode"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="judgmentNode" target="uniqueNode"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="uniqueNode" target="freshJudge"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="freshJudge" target="approvedQ"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="approvedQ" target="finalGate"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="finalGate" target="bankCommit"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="bankCommit" target="endNode"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f1" value="FAIL" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="uniqueNode" target="rewriteNode">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="220" y="585" /><mxPoint x="220" y="325" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f2" value="no (quotes become findings)" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="approvedQ" target="rewriteNode">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="640" y="850" /><mxPoint x="640" y="325" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f3" value="FAIL" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="finalGate" target="rewriteNode">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="180" y="985" /><mxPoint x="180" y="325" /></Array></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
