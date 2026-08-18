@@ -19,8 +19,10 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest tests/ -q
       - name: dogfood the repo docs
+        # README quotes flagged phrases in its calibration section, which
+        # is what --ignore-quotes exists for.
         run: |
-          unslopify README.md
+          unslopify README.md --ignore-quotes
           unslopify SKILL.md
           unslopify examples/chat.md
           unslopify examples/draft.md

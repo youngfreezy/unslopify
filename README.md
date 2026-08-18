@@ -154,19 +154,18 @@ named findings per 1,000 words: 0.28 (7 in 25,021)
 The two columns are different claims and should be read differently.
 
 Named types claim "this is a generated-text pattern", so hits on 1813
-prose are false positives. There were 7 in 25,021 words, and each is
-listed by the script: "in order to" three times (Twain, Doyle, the
-RFC), Darwin's "could possibly" and "might perhaps" (he genuinely
-stacked hedges), and one true artifact, Darwin's chapter-contents
-listing tripping the slogan-fragment shape. No pre-LLM source hit
-inflated contrast, fake authority, AI vocabulary, tacked-on benefits,
-or scene-setting.
+prose are false positives. There were 7 in 25,021 words. The script
+lists each one: "in order to" three times (Twain, Doyle, the RFC),
+two stacked hedges Darwin genuinely wrote, and one true artifact,
+Darwin's chapter-contents listing tripping the slogan-fragment shape.
+No pre-LLM source hit inflated contrast, fake authority, AI
+vocabulary, tacked-on benefits, or scene-setting.
 
 Mechanics are style gates for modern professional writing, not AI
-claims, and they fire exactly where you would expect: Victorian
-sentence lengths, typographic quotes in the Gutenberg files, dashes,
-and the RFC's repeated boilerplate (page headers repeat as n-grams).
-If you are linting literature rather than a work document, raise
+claims. They fire exactly where you would expect: Victorian sentence
+lengths, typographic quotes in the Gutenberg files, dashes, and the
+RFC's repeated boilerplate (page headers repeat as n-grams). If you
+are linting literature rather than a work document, raise
 `--max-sentence-words` and read the mechanics column as description,
 not verdict.
 
