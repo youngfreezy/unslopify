@@ -111,8 +111,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.fix:
         rw = mechanical_rewrite(draft)
         sys.stdout.write(rw.rewritten)
-        for note in rw.applied_fixes:
-            print(f"fixed: {note}", file=sys.stderr)
+        for e in rw.events:
+            print(f"fixed line {e.line}: {e.rule_id}", file=sys.stderr)
         after = rw.audit_after
         if after and after.verdict == "fail":
             print(

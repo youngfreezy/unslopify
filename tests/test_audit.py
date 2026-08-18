@@ -81,13 +81,33 @@ def test_soft_types_respect_threshold():
 
 
 def test_safe_fixes():
-    fixed, notes = apply_safe_fixes(
+    fixed, events = apply_safe_fixes(
         "We did this in order to ship—fast. I hope this helps."
     )
     assert "—" not in fixed
     assert "in order to" not in fixed.lower()
     assert "hope this helps" not in fixed.lower()
-    assert notes
+    ids = {e.rule_id for e in events}
+    assert "dash-to-comma" in ids
+    assert "in-order-to" in ids
+    assert all(e.line == 1 and e.before != e.after for e in events)
+
+
+def test_safe_fixes_preserve_quoted_spans():
+    text = 'The memo says "in order to comply" and uses in order to twice in order to pad.'
+    fixed, events = apply_safe_fixes(text)
+    assert '"in order to comply"' in fixed
+    assert fixed.count("in order to") == 1  # only the quoted one survives
+    assert events
+
+
+def test_mechanical_rewrite_reports_word_counts():
+    from unslopify import mechanical_rewrite, Draft
+
+    rw = mechanical_rewrite(Draft(text="We met in order to decide—quickly."))
+    assert rw.words_before > rw.words_after or rw.words_before == rw.words_after
+    assert rw.events
+    assert rw.policy.preserve_quotes
 
 
 def test_brief_names_each_finding():

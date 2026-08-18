@@ -59,12 +59,44 @@ class Audit(BaseModel):
     fail_reasons: list[str] = Field(default_factory=list)
 
 
+class StylePolicy(BaseModel):
+    """Typed knobs for the rewrite pass.
+
+    The defaults encode plain-language editing: standard capitalization,
+    no injected informality, quotes preserved exactly, and no growth in
+    word count to satisfy a gate.
+    """
+
+    sentence_word_limit: int = 36
+    preserve_quotes: bool = True
+    standard_capitalization: bool = True
+    allow_word_growth: bool = False
+    banned_formulas: list[str] = Field(default_factory=list)
+
+
+class RewriteEvent(BaseModel):
+    """One recorded edit: which rule fired, where, and the exact change."""
+
+    line: int = Field(ge=1)
+    rule_id: str
+    before: str
+    after: str
+
+
 class Rewrite(BaseModel):
-    """A rewrite produced from an audit, plus the audit of the result."""
+    """A rewrite produced from an audit, plus the audit of the result.
+
+    Every edit is a typed event, so the report shows exactly what changed
+    and why, not just the final text.
+    """
 
     original: Draft
     rewritten: str
+    policy: StylePolicy = Field(default_factory=StylePolicy)
+    events: list[RewriteEvent] = Field(default_factory=list)
     applied_fixes: list[str] = Field(default_factory=list)
+    words_before: int = 0
+    words_after: int = 0
     audit_after: Optional[Audit] = None
 
 

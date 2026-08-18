@@ -10,6 +10,8 @@ from .models import (
     JudgeVerdict,
     MechanicsFinding,
     Rewrite,
+    RewriteEvent,
+    StylePolicy,
     VoiceProfile,
 )
 from .rewrite import apply_safe_fixes, build_brief, mechanical_rewrite
@@ -26,6 +28,8 @@ __all__ = [
     "JudgeVerdict",
     "MechanicsFinding",
     "Rewrite",
+    "RewriteEvent",
+    "StylePolicy",
     "VoiceProfile",
     "apply_safe_fixes",
     "build_brief",

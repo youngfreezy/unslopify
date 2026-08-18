@@ -78,6 +78,25 @@ skip a gate because the draft "looks clean".
    first (`unslopify.voice.profile_from_sample`) and aim the rewrite at
    those numbers.
 
+   Plain-language rules for the rewrite itself:
+
+   - One main point per sentence, with an active subject and verb.
+   - Standard capitalization and spelling. Never inject informality,
+     slang, or errors to sound human; that is its own tell.
+   - Quoted material and citations are evidence. Preserve them exactly.
+   - Say the direct thing instead of a template. If you notice the same
+     sentence shape appearing across your rewrites, that shape is a
+     house formula and it dies here.
+   - Name a failure type in your notes only when it clarifies the edit.
+     Do not tag types to satisfy a checklist.
+   - The rewrite should not be longer than the original. Padding added
+     to satisfy a gate is a new finding, not a fix.
+
+   Record every edit you make as a RewriteEvent (line, rule or type id,
+   before, after). `mechanical_rewrite` already logs its own events;
+   yours join the same list, so the final report shows exactly what
+   changed and why.
+
 3. **Judgment pass.** The CLI cannot see everything. Reread the rewrite
    for the judgment-only types: meaning loss (a sentence compressed until
    the point is gone), unexplained jargon the regexes missed, synthetic

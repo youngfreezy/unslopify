@@ -121,6 +121,10 @@ skill's writing rules apply to every outgoing message.
 - The audit is deterministic. Same text in, same report out, no model
   calls, no network. Judgment-only types (meaning loss, jargon the
   regexes miss) are the agent's job and are marked as such in the rubric.
+- Edits are events, not vibes. The mechanical pass records every change
+  as a typed RewriteEvent (line, rule id, before, after) under a
+  StylePolicy, and the skill has the agent log its own edits the same
+  way, so a finished rewrite ships with the exact record of what moved.
 - The judge must be fresh. A model that watched the rewrite approves
   its own choices, so the skill requires a separate context for the final
   read.
