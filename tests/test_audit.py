@@ -163,3 +163,10 @@ def test_wrap_pass_does_not_double_count():
     text = "We leverage the cache, ensuring speed.\n"
     report = audit_text(text)
     assert sum(1 for f in report.findings if f.type_id == "tacked-on-benefit") == 1
+
+
+def test_long_sentence_across_hard_wraps():
+    words = ["word"] * 45
+    wrapped = " ".join(words[:15]) + "\n" + " ".join(words[15:30]) + "\n" + " ".join(words[30:]) + "."
+    report = audit_text(wrapped)
+    assert any(m.check == "sentence-length" for m in report.mechanics)

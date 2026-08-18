@@ -123,14 +123,52 @@ skill's writing rules apply to every outgoing message.
   regexes miss) are the agent's job and are marked as such in the rubric.
 - Edits are events, not vibes. The mechanical pass records every change
   as a typed RewriteEvent (line, rule id, before, after) under a
-  StylePolicy, and the skill has the agent log its own edits the same
-  way, so a finished rewrite ships with the exact record of what moved.
+  StylePolicy. The skill has the agent log its own edits the same way,
+  so a finished rewrite ships with the exact record of what moved.
 - The judge must be fresh. A model that watched the rewrite approves
   its own choices, so the skill requires a separate context for the final
   read.
 - Voice is preserved, not replaced. The optional `VoiceProfile` measures
   the author's sentence lengths, contraction rate, and first-person
   rate, and the rewrite aims at those numbers.
+
+## Calibration on pre-LLM prose
+
+The obvious question for any tool like this: what does it flag in text
+written before language models existed? `scripts/calibrate.py` fetches
+five public sources (Twain 1883, Darwin 1859, Austen 1813, Doyle 1892,
+RFC 7231 from 2014), audits 5,000 words of each, and prints the table.
+Run it yourself; the numbers below are from 2026-08-18.
+
+```text
+source                                     words  named  mech
+Twain, Life on the Mississippi (1883)       5011      1    92
+Darwin, On the Origin of Species (1859)     5003      3   206
+Austen, Pride and Prejudice (1813)          5002      0   192
+Doyle, Adventures of Sherlock Holmes (1892) 5001      2   289
+RFC 7231, HTTP/1.1 Semantics (2014)         5004      1   235
+
+named findings per 1,000 words: 0.28 (7 in 25,021)
+```
+
+The two columns are different claims and should be read differently.
+
+Named types claim "this is a generated-text pattern", so hits on 1813
+prose are false positives. There were 7 in 25,021 words, and each is
+listed by the script: "in order to" three times (Twain, Doyle, the
+RFC), Darwin's "could possibly" and "might perhaps" (he genuinely
+stacked hedges), and one true artifact, Darwin's chapter-contents
+listing tripping the slogan-fragment shape. No pre-LLM source hit
+inflated contrast, fake authority, AI vocabulary, tacked-on benefits,
+or scene-setting.
+
+Mechanics are style gates for modern professional writing, not AI
+claims, and they fire exactly where you would expect: Victorian
+sentence lengths, typographic quotes in the Gutenberg files, dashes,
+and the RFC's repeated boilerplate (page headers repeat as n-grams).
+If you are linting literature rather than a work document, raise
+`--max-sentence-words` and read the mechanics column as description,
+not verdict.
 
 Further reading on plain technical writing:
 [Google developer documentation style guide](https://developers.google.com/style).

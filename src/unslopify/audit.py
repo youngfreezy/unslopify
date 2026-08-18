@@ -140,15 +140,17 @@ def _mechanics(lines: list[str], text: str, max_sentence_words: int) -> list[Mec
                 )
             )
 
-    # Long sentences (feeds the "verbosity" soft type).
-    for lineno, line in enumerate(lines, start=1):
-        for sent in SENTENCE_SPLIT_RE.split(line):
+    # Long sentences (feeds the "verbosity" soft type). Measured over
+    # joined paragraphs, not raw lines, so hard-wrapped prose cannot hide
+    # a long sentence across line breaks.
+    for start, para in _paragraphs(lines):
+        for sent in SENTENCE_SPLIT_RE.split(para):
             n = len(WORD_RE.findall(sent))
             if n > max_sentence_words:
                 mech.append(
                     MechanicsFinding(
                         check="sentence-length",
-                        line=lineno,
+                        line=start,
                         detail=f"{n} words in one sentence (cap {max_sentence_words})",
                     )
                 )
