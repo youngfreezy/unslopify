@@ -25,7 +25,10 @@ from pathlib import Path
 try:
     import tomllib
 except ModuleNotFoundError:  # 3.10
-    tomllib = None
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None
 
 from . import __version__
 from .audit import audit_text
@@ -41,7 +44,7 @@ def _load_config() -> dict:
     """[tool.unslopify] from the nearest pyproject.toml at or above cwd.
     Keys: disable (list of type ids / checks), exclude (glob list),
     max-sentence-words (int)."""
-    if tomllib is None:
+    if tomllib is None:  # no TOML parser available; config is inert
         return {}
     d = Path.cwd()
     for parent in [d, *d.parents]:

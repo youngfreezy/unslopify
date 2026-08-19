@@ -119,7 +119,7 @@ Pre-commit:
 ```yaml
 repos:
   - repo: https://github.com/youngfreezy/unslopify
-    rev: v0.3.0
+    rev: v0.3.1
     hooks:
       - id: unslopify
 ```
@@ -127,7 +127,7 @@ repos:
 GitHub Actions:
 
 ```yaml
-- uses: youngfreezy/unslopify@v0.3.0
+- uses: youngfreezy/unslopify@v0.3.1
   with:
     paths: docs/ README.md
 ```

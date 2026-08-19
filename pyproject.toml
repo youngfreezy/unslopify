@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unslopify"
-version = "0.3.0"
+version = "0.3.1"
 description = "Audit and rewrite text to remove AI-generated writing patterns. Deterministic audit core plus an agent skill for the rewrite loop."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Text Processing :: Linguistic",
 ]
-dependencies = ["pydantic>=2.0"]
+dependencies = ["pydantic>=2.0", "tomli>=2.0; python_version < '3.11'"]
 
 [project.urls]
 Homepage = "https://github.com/youngfreezy/unslopify"
