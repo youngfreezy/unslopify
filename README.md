@@ -54,7 +54,8 @@ to 1 s. Both changes came out of the June incident review.
 ## What it checks
 
 Four categories of named types. `unslopify types` prints all of them
-with definitions and examples.
+with definitions and examples, and [RULES.md](RULES.md) is the full
+catalog with a before and after pair per rule.
 
 - formula: manufactured rhythm. Inflated contrast, negative
   parallelism, slogan fragments, stock triads, fake authority, canned
