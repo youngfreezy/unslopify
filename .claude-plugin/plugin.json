@@ -1,0 +1,5 @@
+{
+  "name": "unslopify",
+  "description": "Deterministic anti-slop gate for agent responses, with stamp memory.",
+  "version": "0.4.0"
+}

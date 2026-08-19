@@ -382,3 +382,125 @@ def test_cli_config_disable_and_exclude(tmp_path, monkeypatch):
     )
     assert r.returncode == 0
     assert "skip-me" not in r.stdout
+
+
+def test_noun_stack_detection():
+    report = audit_text(
+        "The initiative advances capability governance strategy alignment. "
+        "The rollout requires transformation enablement maturity assessment."
+    )
+    assert sum(1 for m in report.mechanics if m.check == "noun-stack") >= 2
+    assert report.verdict == "fail"
+
+
+def test_tech_noun_stacks_are_fine():
+    report = audit_text(
+        "The response header field parser reads the request body stream. "
+        "The database query cache index handles the client token flow."
+    )
+    assert not any(m.check == "noun-stack" for m in report.mechanics)
+
+
+def test_abstract_sentence_detection():
+    text = (
+        "Organizational excellence requires capability alignment, strategy "
+        "governance, and transformation enablement across every initiative. "
+        "Meaningful enablement demands genuine engagement with leadership "
+        "vision, cultural momentum, and collective ownership of performance "
+        "excellence throughout the transformation journey."
+    )
+    report = audit_text(text)
+    assert sum(1 for m in report.mechanics if m.check == "abstract-sentence") >= 2
+    assert report.verdict == "fail"
+
+
+def test_anchored_sentences_are_not_abstract():
+    text = (
+        "The migration strategy assessment covers 14 services and the "
+        "billing database, and Marcus signed off on the rollout plan."
+    )
+    report = audit_text(text)
+    assert not any(m.check == "abstract-sentence" for m in report.mechanics)
+
+
+def test_sensitivity_levels():
+    two_leverage = "We leverage the cache. We leverage the queue."
+    assert audit_text(two_leverage).verdict == "fail"
+    assert audit_text(two_leverage, level="relaxed").verdict == "pass"
+    one_soft = "The team will leverage the new cache."
+    assert audit_text(one_soft).verdict == "pass"
+    assert audit_text(one_soft, level="strict").verdict == "fail"
+
+
+def _run_hook(payload, env_home):
+    import json as jsonlib
+    import os
+
+    env = dict(os.environ, UNSLOPIFY_HOME=str(env_home), PYTHONPATH="src")
+    r = subprocess.run(
+        [sys.executable, "hooks/stop_hook.py"],
+        input=jsonlib.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    out = jsonlib.loads(r.stdout) if r.stdout.strip() else None
+    return r.returncode, out
+
+
+def test_stop_hook_blocks_sloppy_response(tmp_path):
+    sloppy = SLOPPY * 4
+    rc, out = _run_hook(
+        {"last_assistant_message": sloppy, "stop_hook_active": False, "session_id": "abc"},
+        tmp_path,
+    )
+    assert rc == 0
+    assert out and out["decision"] == "block"
+    assert "fake-authority" in out["reason"]
+
+
+def test_stop_hook_respects_active_flag(tmp_path):
+    rc, out = _run_hook(
+        {"last_assistant_message": SLOPPY * 4, "stop_hook_active": True},
+        tmp_path,
+    )
+    assert rc == 0 and out is None
+
+
+def test_stop_hook_ignores_short_responses(tmp_path):
+    rc, out = _run_hook(
+        {"last_assistant_message": "Done. The fix shipped.", "stop_hook_active": False},
+        tmp_path,
+    )
+    assert rc == 0 and out is None
+
+
+def test_stop_hook_banks_and_catches_stamps(tmp_path):
+    clean = (
+        "The migration finished this morning and all nine fixtures updated "
+        "in place with no rollback needed. The dashboard shows the same "
+        "totals as before the move, and the nightly export ran on schedule "
+        "at half past two. Nothing else in the pipeline touched the "
+        "affected tables, so the remaining work is deleting the old "
+        "snapshots once the retention window closes on Friday afternoon."
+    )
+    rc, out = _run_hook(
+        {"last_assistant_message": clean, "stop_hook_active": False, "session_id": "s1"},
+        tmp_path,
+    )
+    assert rc == 0 and out is None  # passed and banked
+    # a later response reusing two 8-word runs verbatim is a stamp
+    reuse = (
+        "Quick update on the batch job after this evening's run. The "
+        "dashboard shows the same totals as before the move, and the "
+        "nightly export ran on schedule at half past two. Everything else "
+        "looks healthy, the queue drained before midnight, and deploys "
+        "resume tomorrow when the freeze lifts for the release train."
+    )
+    rc, out = _run_hook(
+        {"last_assistant_message": reuse, "stop_hook_active": False, "session_id": "s2"},
+        tmp_path,
+    )
+    assert rc == 0
+    assert out and out["decision"] == "block"
+    assert "stamps" in out["reason"]

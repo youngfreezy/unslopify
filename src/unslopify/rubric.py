@@ -375,6 +375,28 @@ TYPES: tuple[SlopType, ...] = (
         threshold=2,
     ),
     SlopType(
+        id="noun-stack",
+        name="Abstract noun stack",
+        category="wording",
+        definition="Three or more abstract nouns compressed into one phrase until nothing in it can be pictured.",
+        example_bad="The initiative advances capability governance strategy alignment.",
+        example_fix="The security team now approves new vendor tools before purchase.",
+        patterns=(),  # detected structurally in audit.py via the lexicon
+        severity="soft",
+        threshold=2,
+    ),
+    SlopType(
+        id="abstract-sentence",
+        name="Abstract sentence",
+        category="wording",
+        definition="A sentence dominated by abstract vocabulary with no number, name, or object anchoring it.",
+        example_bad="Effective transformation requires sustained commitment to organizational excellence and continuous optimization.",
+        example_fix="Shipping weekly means the release checklist has to shrink from 40 steps to 12.",
+        patterns=(),  # detected structurally in audit.py via the lexicon
+        severity="soft",
+        threshold=2,
+    ),
+    SlopType(
         id="verbosity",
         name="Verbosity",
         category="wording",

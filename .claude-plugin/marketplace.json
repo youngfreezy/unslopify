@@ -1,0 +1,11 @@
+{
+  "name": "unslopify",
+  "description": "Deterministic anti-slop gate for agent responses, with stamp memory.",
+  "plugins": [
+    {
+      "name": "unslopify",
+      "description": "Audits every completed response for AI-writing patterns and requests one clearer rewrite. Remembers phrasing across responses so the agent cannot develop stamps.",
+      "source": "./"
+    }
+  ]
+}

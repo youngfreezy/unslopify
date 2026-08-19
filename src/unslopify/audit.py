@@ -20,6 +20,7 @@ from __future__ import annotations
 import math
 import re
 
+from .lexicon import ABSTRACT_NOUNS, STOPWORDS, TECH_ANCHORS, is_abstract
 from .models import Audit, Draft, Finding, MechanicsFinding
 from .rubric import TYPES, SlopType
 
@@ -46,10 +47,15 @@ SEMICOLONS_PER_100_WORDS = 1.0
 NGRAM_N = 4
 NGRAM_MAX_REPEATS = 1
 
+# Sensitivity levels multiply the length-scaled soft thresholds.
+LEVELS = {"strict": 0.5, "standard": 1.0, "relaxed": 2.0}
 
-def _scaled(threshold: int, words: int) -> int:
-    """A soft threshold is per 1,000 words, floored at its base value."""
-    return max(threshold, math.ceil(threshold * words / 1000))
+
+def _scaled(threshold: int, words: int, level: float = 1.0) -> int:
+    """A soft threshold is per 1,000 words, floored at its base value and
+    multiplied by the sensitivity level."""
+    base = max(threshold, math.ceil(threshold * words / 1000))
+    return max(1, math.ceil(base * level))
 
 
 def _ngram_allowance(words: int) -> int:
@@ -285,11 +291,68 @@ def _mechanics(
                         ),
                     )
                 )
+    # Abstraction (both feed soft types in the verdict).
+    # noun-stack: three or more consecutive abstract nouns with no
+    # concrete or technical word breaking the run.
+    # abstract-sentence: a sentence dominated by abstract vocabulary with
+    # no concrete anchor (number, technical noun, or proper name).
+    if "noun-stack" not in disabled or "abstract-sentence" not in disabled:
+        for start, para in _paragraphs(lines):
+            if start in disabled_lines:
+                continue
+            for sent in SENTENCE_SPLIT_RE.split(para):
+                tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", sent)
+                if not tokens:
+                    continue
+                if "noun-stack" not in disabled:
+                    run: list[str] = []
+                    for tok in tokens + [""]:
+                        low = tok.lower()
+                        if tok and low not in STOPWORDS and is_abstract(tok):
+                            run.append(tok)
+                            continue
+                        if len(run) >= 3:
+                            mech.append(
+                                MechanicsFinding(
+                                    check="noun-stack",
+                                    line=start,
+                                    detail=f"abstract noun stack: {' '.join(run)!r}",
+                                )
+                            )
+                        run = []
+                if "abstract-sentence" not in disabled:
+                    content = [
+                        w for w in tokens if w.lower() not in STOPWORDS and len(w) > 2
+                    ]
+                    if len(content) < 10:
+                        continue
+                    abstract = sum(1 for w in content if is_abstract(w))
+                    anchored = (
+                        any(ch.isdigit() for ch in sent)
+                        or '"' in sent
+                        or any(w.lower() in TECH_ANCHORS for w in content)
+                        or any(w[0].isupper() for w in content[1:])
+                    )
+                    if not anchored and abstract / len(content) >= 0.5:
+                        mech.append(
+                            MechanicsFinding(
+                                check="abstract-sentence",
+                                line=start,
+                                detail=(
+                                    f"{abstract}/{len(content)} content words are "
+                                    f"abstract with no concrete anchor: "
+                                    f"{sent.strip()[:90]!r}"
+                                ),
+                            )
+                        )
     return mech
 
 
 def _verdict(
-    findings: list[Finding], mech: list[MechanicsFinding], words: int
+    findings: list[Finding],
+    mech: list[MechanicsFinding],
+    words: int,
+    level: float = 1.0,
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
 
@@ -311,9 +374,13 @@ def _verdict(
         soft_counts["staged-punctuation"] = (
             soft_counts.get("staged-punctuation", 0) + 2 * n_semi
         )
+    for check, type_id in (("noun-stack", "noun-stack"), ("abstract-sentence", "abstract-sentence")):
+        n = sum(1 for m in mech if m.check == check)
+        if n:
+            soft_counts[type_id] = soft_counts.get(type_id, 0) + n
     for type_id, count in sorted(soft_counts.items()):
         t = by_id[type_id]
-        limit = _scaled(t.threshold, words)
+        limit = _scaled(t.threshold, words, level)
         if count >= limit:
             reasons.append(
                 f"{t.name}: {count} hits (threshold {limit} at {words} words)"
@@ -334,6 +401,7 @@ def audit_text(
     ignore_quoted: bool = False,
     max_sentence_words: int = MAX_SENTENCE_WORDS,
     disable: set[str] | None = None,
+    level: str = "standard",
 ) -> Audit:
     """Audit a draft and return a full report.
 
@@ -359,7 +427,7 @@ def audit_text(
 
     findings = _type_findings(lines, ignore_quoted, disabled, disabled_lines)
     mech = _mechanics(lines, prose, max_sentence_words, disabled, disabled_lines)
-    verdict, reasons = _verdict(findings, mech, words)
+    verdict, reasons = _verdict(findings, mech, words, LEVELS.get(level, 1.0))
 
     counts_by_type: dict[str, int] = {}
     counts_by_category: dict[str, int] = {}

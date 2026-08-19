@@ -178,6 +178,22 @@ Before: "The library serves as the backbone of the rendering pipeline."
 
 After: "The library is the rendering pipeline's core dependency."
 
+### `noun-stack` (judgment)
+
+Three or more abstract nouns compressed into one phrase until nothing in it can be pictured.
+
+Before: "The initiative advances capability governance strategy alignment."
+
+After: "The security team now approves new vendor tools before purchase."
+
+### `abstract-sentence` (judgment)
+
+A sentence dominated by abstract vocabulary with no number, name, or object anchoring it.
+
+Before: "Effective transformation requires sustained commitment to organizational excellence and continuous optimization."
+
+After: "Shipping weekly means the release checklist has to shrink from 40 steps to 12."
+
 ### `verbosity` (judgment)
 
 A sentence that runs far past the length its content needs.

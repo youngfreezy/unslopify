@@ -187,6 +187,7 @@ def _run_one(
         ignore_quoted=args.ignore_quotes,
         max_sentence_words=args.max_sentence_words,
         disable=disable,
+        level=args.level,
     )
     bank_fails = cross_check(text, doc_id=args.doc_id) if args.bank else []
     if bank_fails:
@@ -235,6 +236,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bank", action="store_true", help="also check the cross-document phrase bank")
     parser.add_argument("--id", dest="doc_id", help="document id (for commit, or to skip self-overlap with --bank)")
     parser.add_argument("--ignore-quotes", action="store_true", help="skip text inside double quotes")
+    parser.add_argument(
+        "--level",
+        choices=["strict", "standard", "relaxed"],
+        default=None,
+        help="sensitivity: strict halves soft-type allowances, relaxed doubles them",
+    )
     parser.add_argument("--max-sentence-words", type=int, default=36)
     parser.add_argument("--version", action="version", version=f"unslopify {__version__}")
     args = parser.parse_args(argv)
@@ -245,6 +252,8 @@ def main(argv: list[str] | None = None) -> int:
     exclude = [str(x) for x in config.get("exclude", [])]
     if args.max_sentence_words == 36 and "max-sentence-words" in config:
         args.max_sentence_words = int(config["max-sentence-words"])
+    if args.level is None:
+        args.level = str(config.get("level", "standard"))
 
     targets = list(args.targets)
     if args.write and not args.fix:

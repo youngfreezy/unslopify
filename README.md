@@ -63,7 +63,8 @@ catalog with a before and after pair per rule.
 - substance: claims a reader cannot verify. Empty abstraction,
   tacked-on benefits, process instead of reason, unsupported claims.
 - wording: buried points. Bureaucratic phrasing, hedge stacks,
-  unexplained jargon, copula avoidance, overlong sentences.
+  unexplained jargon, copula avoidance, overlong sentences, abstract
+  noun stacks, and sentences with no concrete anchor.
 - structure: packaging that delays the point. Scene-setting,
   request restatement, meta-announcements, redundant conclusions,
   over-structure.
@@ -86,12 +87,15 @@ unslopify DRAFT.md --fix -w     # apply the fixes in place
 unslopify DRAFT.md --bank       # also check the cross-document phrase bank
 unslopify commit DRAFT.md --id blog-2026-08   # bank a finished document
 unslopify types                 # print the rubric
+unslopify DRAFT.md --level strict   # halve soft allowances (or: relaxed)
 ```
 
 Color respects `NO_COLOR` and `FORCE_COLOR`. Exit codes are stable:
 0 pass, 1 findings in any file, 2 usage or IO error. Soft-type
 thresholds and the repeated-phrase allowance scale with document
 length, so long reports are judged at their own density, not a memo's.
+`--level` (also a config key) halves or doubles the soft allowances;
+hard rules are unaffected.
 
 ## Suppression and config
 
@@ -120,7 +124,7 @@ Pre-commit:
 ```yaml
 repos:
   - repo: https://github.com/youngfreezy/unslopify
-    rev: v0.3.1
+    rev: v0.4.0
     hooks:
       - id: unslopify
 ```
@@ -128,7 +132,7 @@ repos:
 GitHub Actions:
 
 ```yaml
-- uses: youngfreezy/unslopify@v0.3.1
+- uses: youngfreezy/unslopify@v0.4.0
   with:
     paths: docs/ README.md
 ```
@@ -140,6 +144,38 @@ The phrase bank lives at `~/.unslopify/phrase_bank.jsonl` (override with
 `UNSLOPIFY_HOME`). Committing a finished document banks its 8-word
 phrases, and future drafts that reuse any of them fail the `--bank` check.
 This is what stops a writer, or an agent, from developing stamps.
+
+## Claude Code plugin: the in-loop gate with memory
+
+```text
+/plugin marketplace add youngfreezy/unslopify
+/plugin install unslopify@unslopify
+```
+
+A Stop hook audits every completed response (needs
+`pip install unslopify` on the hook's python3). On a fail it requests
+exactly one clearer rewrite with the findings as the brief; the
+`stop_hook_active` guard makes a retry loop impossible. Responses that
+pass are banked, and that is the part nothing else does: when the
+agent starts reusing the same 8-word phrasing across responses, the
+hook quotes the repeated spans back and demands different words, not
+reshuffled ones. Clean-each-time is not the bar; clean-and-not-a-stamp
+is.
+
+## Where it sits
+
+[humanizer](https://github.com/blader/humanizer) is a prompt-only
+skill: it rewrites by instruction, with nothing deterministic to gate
+on. [nopus](https://github.com/Vistyy/nopus) gates coding-agent
+responses in-loop with statistical prose measures, and does that well;
+it has no document mode, no named rules, and no memory. Vale and
+proselint lint prose against style rules but know nothing about
+AI-writing patterns. unslopify is the document linter and CI gate with
+named, sourced rules, plus the same in-loop enforcement, plus the one
+thing none of them have: the phrase bank, which remembers how
+everything before was worded and fails repetition across documents and
+responses. A linter tells you this text is bad. This one also tells
+you that you are starting to sound like yourself on autopilot.
 
 ## Agent skill
 
