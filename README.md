@@ -124,7 +124,7 @@ Pre-commit:
 ```yaml
 repos:
   - repo: https://github.com/youngfreezy/unslopify
-    rev: v0.4.0
+    rev: v0.4.1
     hooks:
       - id: unslopify
 ```
@@ -132,7 +132,7 @@ repos:
 GitHub Actions:
 
 ```yaml
-- uses: youngfreezy/unslopify@v0.4.0
+- uses: youngfreezy/unslopify@v0.4.1
   with:
     paths: docs/ README.md
 ```
@@ -166,16 +166,14 @@ is.
 
 [humanizer](https://github.com/blader/humanizer) is a prompt-only
 skill: it rewrites by instruction, with nothing deterministic to gate
-on. [nopus](https://github.com/Vistyy/nopus) gates coding-agent
-responses in-loop with statistical prose measures, and does that well;
-it has no document mode, no named rules, and no memory. Vale and
-proselint lint prose against style rules but know nothing about
-AI-writing patterns. unslopify is the document linter and CI gate with
-named, sourced rules, plus the same in-loop enforcement, plus the one
-thing none of them have: the phrase bank, which remembers how
-everything before was worded and fails repetition across documents and
-responses. A linter tells you this text is bad. This one also tells
-you that you are starting to sound like yourself on autopilot.
+on. Vale and proselint lint prose against style rules but know nothing
+about AI-writing patterns. unslopify is the document linter and CI
+gate with named rules, plus in-loop enforcement through the Claude
+Code plugin, plus the thing neither rewriters nor linters have: the
+phrase bank, which remembers how everything before was worded and
+fails repetition across documents and responses. A linter tells you
+this text is bad. This one also tells you that you are starting to
+sound like yourself on autopilot.
 
 ## Agent skill
 
