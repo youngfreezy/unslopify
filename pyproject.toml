@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unslopify"
-version = "0.1.0"
+version = "0.2.0"
 description = "Audit and rewrite text to remove AI-generated writing patterns. Deterministic audit core plus an agent skill for the rewrite loop."
 readme = "README.md"
 license = { file = "LICENSE" }

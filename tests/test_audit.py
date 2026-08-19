@@ -170,3 +170,74 @@ def test_long_sentence_across_hard_wraps():
     wrapped = " ".join(words[:15]) + "\n" + " ".join(words[15:30]) + "\n" + " ".join(words[30:]) + "."
     report = audit_text(wrapped)
     assert any(m.check == "sentence-length" for m in report.mechanics)
+
+
+def test_cli_multiple_files_and_aggregate_exit(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    a = tmp_path / "a.md"
+    a.write_text(CLEAN)
+    b = tmp_path / "b.md"
+    b.write_text(SLOPPY)
+    run = lambda *args: subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", *args],
+        capture_output=True,
+        text=True,
+    )
+    r = run(str(a), str(b))
+    assert r.returncode == 1
+    assert "a.md" in r.stdout and "b.md" in r.stdout  # nothing silently skipped
+    assert "2 files checked: fail" in r.stdout
+    assert run(str(a), str(a)).returncode == 0
+
+
+def test_cli_directory_recursion(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    sub = tmp_path / "docs" / "inner"
+    sub.mkdir(parents=True)
+    (sub / "x.md").write_text(SLOPPY)
+    (tmp_path / "docs" / "skip.py").write_text("experts agree = 1\n")
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", str(tmp_path / "docs")],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 1
+    assert "x.md" in r.stdout
+    assert "skip.py" not in r.stdout  # non-text files stay out
+
+
+def test_cli_piped_stdin_without_dash(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli"],
+        input="Experts agree this works.\n",
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 1
+    assert "fake-authority" in r.stdout
+
+
+def test_cli_fix_write_in_place(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    f = tmp_path / "f.md"
+    f.write_text("We met in order to decide.\n")
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", str(f), "--fix", "-w"],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0
+    assert "in order to" not in f.read_text()
+    assert "fixed" in r.stderr
+
+
+def test_urls_and_link_targets_are_not_prose():
+    text = (
+        "[![test](https://github.com/u/r/actions/workflows/test.yml/badge.svg)](https://github.com/u/r/actions)\n"
+        "[![pypi](https://img.shields.io/pypi/v/x)](https://pypi.org/project/x/)\n"
+        "See https://example.com/experts-agree for details.\n"
+    )
+    report = audit_text(text)
+    assert report.verdict == "pass"
+    assert not any(m.check == "repeated-ngram" for m in report.mechanics)

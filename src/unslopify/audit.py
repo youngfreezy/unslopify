@@ -18,6 +18,8 @@ CURLY = "‘’“”"
 
 FENCE_RE = re.compile(r"^(```|~~~)")
 QUOTED_RE = re.compile(r'"[^"\n]*"')
+URL_RE = re.compile(r"https?://\S+")
+MD_LINK_TARGET_RE = re.compile(r"(!?\[[^\]]*\])\(([^)\s]+)[^)]*\)")
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
 SENTENCE_SPLIT_RE = re.compile(r"[.!?]+(?:\s|$)")
 
@@ -29,7 +31,9 @@ NGRAM_MAX_REPEATS = 1
 
 
 def _strip_code_blocks(lines: list[str]) -> list[str]:
-    """Blank out fenced code blocks; audit prose, not code."""
+    """Blank out fenced code blocks; audit prose, not code. Markdown link
+    targets and bare URLs are dropped too (link text stays), so badge
+    rows and reference lists do not read as repeated prose."""
     out: list[str] = []
     in_fence = False
     for line in lines:
@@ -37,7 +41,12 @@ def _strip_code_blocks(lines: list[str]) -> list[str]:
             in_fence = not in_fence
             out.append("")
             continue
-        out.append("" if in_fence else line)
+        if in_fence:
+            out.append("")
+            continue
+        line = MD_LINK_TARGET_RE.sub(r"\1", line)
+        line = URL_RE.sub(" ", line)
+        out.append(line)
     return out
 
 

@@ -1,0 +1,30 @@
+name: unslopify
+description: Audit text files for AI-writing patterns. Fails the job on findings.
+branding:
+  icon: edit-3
+  color: orange
+inputs:
+  paths:
+    description: Files or directories to audit (space-separated).
+    required: false
+    default: "."
+  args:
+    description: Extra CLI flags, e.g. "--ignore-quotes --max-sentence-words 40".
+    required: false
+    default: ""
+  version:
+    description: unslopify version to install from PyPI.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then
+          pip install "unslopify==${{ inputs.version }}"
+        else
+          pip install unslopify
+        fi
+    - shell: bash
+      run: unslopify ${{ inputs.paths }} ${{ inputs.args }}

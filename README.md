@@ -1,13 +1,27 @@
 # unslopify
 
+[![test](https://github.com/youngfreezy/unslopify/actions/workflows/test.yml/badge.svg)](https://github.com/youngfreezy/unslopify/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/unslopify)](https://pypi.org/project/unslopify/)
+[![Python](https://img.shields.io/pypi/pyversions/unslopify)](https://pypi.org/project/unslopify/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Audit and rewrite text to remove AI-writing patterns. A deterministic
 Python core finds the named failures. An agent skill runs the rewrite
 loop until a fresh-context judge cannot tell a model touched the text.
+Calibrated against pre-LLM prose: 0.28 named findings per 1,000 words
+across Twain, Darwin, Austen, Doyle, and an RFC
+([numbers below](#calibration-on-pre-llm-prose)).
 
 ## Install
 
 ```
 pip install unslopify
+```
+
+Or run it without installing:
+
+```
+uvx unslopify draft.md
 ```
 
 ## 30 seconds
@@ -62,14 +76,42 @@ repeated inside one document.
 
 ```
 unslopify DRAFT.md              # audit; exit 0 pass, 1 findings
-unslopify - < draft.txt         # audit stdin
+unslopify docs/ README.md       # many files; directories recurse (.md .txt .rst)
+cat draft.txt | unslopify       # audit stdin
 unslopify DRAFT.md --json       # full report as JSON
 unslopify DRAFT.md --brief      # rewrite instructions for a model or human
-unslopify DRAFT.md --fix        # apply safe mechanical fixes only
+unslopify DRAFT.md --fix        # safe mechanical fixes to stdout
+unslopify DRAFT.md --fix -w     # apply the fixes in place
 unslopify DRAFT.md --bank       # also check the cross-document phrase bank
 unslopify commit DRAFT.md --id blog-2026-08   # bank a finished document
 unslopify types                 # print the rubric
 ```
+
+Color respects `NO_COLOR` and `FORCE_COLOR`. Exit codes are stable:
+0 pass, 1 findings in any file, 2 usage or IO error.
+
+## CI gate
+
+Pre-commit:
+
+```yaml
+repos:
+  - repo: https://github.com/youngfreezy/unslopify
+    rev: v0.2.0
+    hooks:
+      - id: unslopify
+```
+
+GitHub Actions:
+
+```yaml
+- uses: youngfreezy/unslopify@v0.2.0
+  with:
+    paths: docs/ README.md
+```
+
+Both fail on findings, so generated slop cannot merge quietly. This
+repo runs its own audit in CI on every push.
 
 The phrase bank lives at `~/.unslopify/phrase_bank.jsonl` (override with
 `UNSLOPIFY_HOME`). Committing a finished document banks its 8-word

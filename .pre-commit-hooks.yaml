@@ -1,0 +1,6 @@
+- id: unslopify
+  name: unslopify
+  description: Audit staged text files for AI-writing patterns.
+  entry: unslopify
+  language: python
+  types_or: [markdown, plain-text, rst]
