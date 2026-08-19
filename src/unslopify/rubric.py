@@ -37,8 +37,8 @@ class SlopType:
     threshold: int = 1  # soft types fail at >= threshold hits
 
 
-def _p(*sources: str) -> tuple[re.Pattern, ...]:
-    return tuple(re.compile(s, re.IGNORECASE) for s in sources)
+def _p(*sources: str, flags: int = re.IGNORECASE) -> tuple[re.Pattern, ...]:
+    return tuple(re.compile(s, flags) for s in sources)
 
 
 TYPES: tuple[SlopType, ...] = (
@@ -80,10 +80,11 @@ TYPES: tuple[SlopType, ...] = (
         example_bad="One codebase. Zero excuses. Ship it.",
         example_fix="Merging the two apps into one codebase removes the duplicate release work.",
         patterns=_p(
-            r"^\s*(?:[A-Z][\w'-]*(?:\s+[\w'-]+){0,3}\.\s+){2,}[A-Z][\w'-]*(?:\s+[\w'-]+){0,3}\.\s*$",
+            r"^\s*(?:[A-Z][\w'-]*(?:\s+[\w'-]+){0,2}\.\s+){2,}[A-Z][\w'-]*(?:\s+[\w'-]+){0,2}\.\s*$",
+            flags=0,
         ),
         severity="soft",
-        threshold=1,
+        threshold=2,
     ),
     SlopType(
         id="stock-triad",
@@ -202,8 +203,6 @@ TYPES: tuple[SlopType, ...] = (
         example_fix="The company moved to a smaller office in Frisco to cut rent by half.",
         patterns=_p(
             r"\bmarks? a\b[^.!?]{0,40}\b(?:moment|milestone|chapter|shift|turning point|era)\b",
-            r"\bstands? as\b",
-            r"\bserves? as\b",
             r"\breflect(?:s|ing) broader\b",
             r"\bevolving landscape\b",
             r"\bprofound (?:shift|change|impact)\b",
@@ -340,6 +339,8 @@ TYPES: tuple[SlopType, ...] = (
             r"\bit would be advisable\b",
             r"\bperhaps somewhat\b",
         ),
+        severity="soft",
+        threshold=2,
     ),
     SlopType(
         id="unexplained-jargon",

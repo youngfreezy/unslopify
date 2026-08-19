@@ -241,3 +241,144 @@ def test_urls_and_link_targets_are_not_prose():
     report = audit_text(text)
     assert report.verdict == "pass"
     assert not any(m.check == "repeated-ngram" for m in report.mechanics)
+
+
+def test_terse_prose_is_not_a_slogan():
+    assert audit_text("Use Postgres. The team knows it. Migration is easy.").verdict == "pass"
+    assert audit_text("it works. tests pass. ship it.").verdict == "pass"
+
+
+def test_slogan_fragment_still_catches_taglines():
+    text = "One Team. One Vision. Zero Excuses.\n\nOne Pipeline. Zero Friction. Pure Speed.\n"
+    report = audit_text(text)
+    assert sum(1 for f in report.findings if f.type_id == "slogan-fragment") >= 2
+    assert report.verdict == "fail"
+
+
+def test_serves_as_maps_to_exactly_one_type():
+    report = audit_text("The library serves as the core dependency.")
+    ids = [f.type_id for f in report.findings]
+    assert ids == ["copula-avoidance"]
+    assert report.verdict == "pass"  # soft, one hit, threshold 2
+
+
+def test_soft_thresholds_scale_with_length():
+    filler = ("The report covers region five. " * 40 + "\n\n") * 18  # ~4300 words, but repetitive
+    doc = filler.replace("region five", "each region once")  # avoid ngram noise
+    # two "leverage" in a ~4000-word doc is under the scaled threshold
+    long_doc = ("word " * 200 + ". ") * 20 + " We leverage caching. We leverage queues."
+    report = audit_text(long_doc, disable={"repeated-ngram", "sentence-length"})
+    assert not any("AI vocabulary" in r for r in report.fail_reasons)
+
+
+def test_hedge_stack_is_soft_now():
+    assert audit_text("It could possibly rain.").verdict == "pass"
+    assert audit_text("It could possibly rain. We might perhaps stay.").verdict == "fail"
+
+
+def test_bullets_are_not_one_long_sentence():
+    bullets = "\n".join(f"- item number {i} does a thing" for i in range(8))
+    report = audit_text(bullets, disable={"repeated-ngram"})
+    assert not any(m.check == "sentence-length" for m in report.mechanics)
+
+
+def test_frontmatter_and_tables_are_skipped():
+    text = "---\ntitle: experts agree\n---\n\n| col | experts agree |\n| --- | --- |\n\nPlain body.\n"
+    assert audit_text(text).findings == []
+
+
+def test_pragma_disable_file():
+    text = "<!-- unslopify:disable -->\nExperts agree this works.\n"
+    assert audit_text(text).verdict == "pass"
+
+
+def test_pragma_disable_types_and_line():
+    by_type = "<!-- unslopify:disable=fake-authority -->\nExperts agree this works.\n"
+    assert audit_text(by_type).verdict == "pass"
+    by_line = "Experts agree this works. <!-- unslopify:disable-line -->\nExperts agree again.\n"
+    report = audit_text(by_line)
+    assert all(f.line != 1 for f in report.findings)
+    assert any(f.line == 2 for f in report.findings)
+
+
+def test_pragma_in_code_fence_is_documentation():
+    text = "Use this pragma:\n\n```\n<!-- unslopify:disable -->\n```\n\nExperts agree this works.\n"
+    assert audit_text(text).verdict == "fail"
+
+
+def test_ngram_allowance_scales():
+    from unslopify.audit import _ngram_allowance
+
+    assert _ngram_allowance(300) == 1
+    assert _ngram_allowance(6000) == 5
+
+
+def test_bank_ignores_shared_quotations(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    quote = '"the seating chart has two owners and the venue task has no date"'
+    commit(f"first doc cites {quote} as evidence for one claim here", "d1")
+    assert cross_check(f"second doc also cites {quote} in its own words", "d2") == []
+
+
+def test_voice_possessives_are_not_contractions():
+    prof = profile_from_sample(
+        "The team's plan met the board's goal. The quarter's numbers held. "
+        "The vendor's contract and the client's budget aligned well."
+    )
+    assert prof.contraction_rate == 0
+
+
+def test_cli_types_shadowing(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    (tmp_path / "types").write_text(SLOPPY)
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", "types"],
+        capture_output=True, text=True, cwd=tmp_path,
+    )
+    assert r.returncode == 1  # audits the file, does not print the rubric
+    assert "fake-authority" in r.stdout
+
+
+def test_cli_non_utf8_is_exit_2(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    bad = tmp_path / "bad.md"
+    bad.write_bytes(b"\xff\xfe not utf8 \x9c")
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", str(bad)],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 2
+    assert "not valid UTF-8" in r.stderr
+
+
+def test_cli_multi_file_json_is_an_array(tmp_path, monkeypatch):
+    import json as jsonlib
+
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    a = tmp_path / "a.md"
+    a.write_text(CLEAN)
+    b = tmp_path / "b.md"
+    b.write_text(SLOPPY)
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", str(a), str(b), "--json"],
+        capture_output=True, text=True,
+    )
+    data = jsonlib.loads(r.stdout)
+    assert isinstance(data, list) and len(data) == 2
+
+
+def test_cli_config_disable_and_exclude(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.unslopify]\ndisable = ["fake-authority"]\nexclude = ["skip-*.md"]\n'
+    )
+    doc = tmp_path / "doc.md"
+    doc.write_text("Experts agree this works.\n")
+    skipped = tmp_path / "skip-me.md"
+    skipped.write_text(SLOPPY)
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", "doc.md", "skip-me.md"],
+        capture_output=True, text=True, cwd=tmp_path,
+    )
+    assert r.returncode == 0
+    assert "skip-me" not in r.stdout

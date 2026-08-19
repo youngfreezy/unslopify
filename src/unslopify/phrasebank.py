@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,6 +22,7 @@ CROSS_NGRAM_N = 8
 CROSS_HIT_MIN = 1  # any 8-word overlap with another document fails
 
 _WORD_RE = re.compile(r"[A-Za-z0-9']+")
+_QUOTED_RE = re.compile(r'"[^"\n]*"')
 
 
 def bank_dir() -> Path:
@@ -37,7 +39,10 @@ def _normalize(text: str) -> str:
 
 
 def ngrams(text: str, n: int = CROSS_NGRAM_N) -> set[str]:
-    words = _normalize(text).split()
+    """Commentary n-grams. Quoted spans are masked first: two documents
+    that faithfully preserve the same quotation are not copying each
+    other, and the skill requires quotes to be preserved exactly."""
+    words = _normalize(_QUOTED_RE.sub(" ", text)).split()
     return {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
 
 
@@ -58,26 +63,22 @@ def load_bank() -> list[dict]:
 
 
 def cross_check(text: str, doc_id: str | None = None) -> list[str]:
-    """Return failure messages for n-gram overlap with other banked docs."""
+    """Return one failure message per banked doc this text overlaps."""
     mine = ngrams(text)
     if not mine:
         return []
-    worst_id: str | None = None
-    worst: list[str] = []
+    fails: list[str] = []
     for row in load_bank():
         other = str(row.get("doc_id") or "")
         if doc_id and other == doc_id:
             continue
         hits = sorted(mine & set(row.get("ngrams") or []))
-        if len(hits) > len(worst):
-            worst = hits
-            worst_id = other
-    if len(worst) >= CROSS_HIT_MIN:
-        return [
-            f"{len(worst)} {CROSS_NGRAM_N}-word phrase(s) overlap banked doc "
-            f"{worst_id!r}; e.g. {worst[:3]!r}"
-        ]
-    return []
+        if len(hits) >= CROSS_HIT_MIN:
+            fails.append(
+                f"{len(hits)} {CROSS_NGRAM_N}-word phrase(s) overlap banked doc "
+                f"{other!r}; e.g. {hits[:3]!r}"
+            )
+    return fails
 
 
 def commit(text: str, doc_id: str) -> Path:
@@ -92,8 +93,18 @@ def commit(text: str, doc_id: str) -> Path:
     existing = [r for r in load_bank() if str(r.get("doc_id") or "") != doc_id]
     path = bank_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        for r in existing:
-            fh.write(json.dumps(r, ensure_ascii=True) + "\n")
-        fh.write(json.dumps(row, ensure_ascii=True) + "\n")
+    # atomic replace: a crash mid-write must not eat the bank
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".bank-", suffix=".jsonl")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            for r in existing:
+                fh.write(json.dumps(r, ensure_ascii=True) + "\n")
+            fh.write(json.dumps(row, ensure_ascii=True) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return path

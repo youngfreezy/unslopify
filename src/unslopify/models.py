@@ -37,7 +37,7 @@ class Finding(BaseModel):
 class MechanicsFinding(BaseModel):
     """A structural or character-level problem (not tied to a rubric type)."""
 
-    check: str  # e.g. "em-dash", "curly-quotes", "sentence-length", "repeated-ngram"
+    check: str  # e.g. "dash", "curly-quotes", "sentence-length", "repeated-ngram"
     line: int
     detail: str
 

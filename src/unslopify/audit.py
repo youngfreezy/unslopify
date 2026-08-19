@@ -3,10 +3,21 @@
 No model calls. Everything here is regex and counting, so the same input
 always produces the same report. The agent skill layers judgment on top;
 this module is the floor it stands on.
+
+Suppression:
+- ``unslopify:disable`` anywhere in a file skips the whole file.
+- ``unslopify:disable=id1,id2`` disables those type ids or mechanics
+  checks for the file.
+- ``unslopify:disable-line`` suppresses every finding on its own line.
+
+Soft-type thresholds and the repeated-phrase allowance scale with
+document length (per 1,000 words), so a long report is not failed for
+the density that is normal at ten times the size of a memo.
 """
 
 from __future__ import annotations
 
+import math
 import re
 
 from .models import Audit, Draft, Finding, MechanicsFinding
@@ -22,6 +33,12 @@ URL_RE = re.compile(r"https?://\S+")
 MD_LINK_TARGET_RE = re.compile(r"(!?\[[^\]]*\])\(([^)\s]+)[^)]*\)")
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
 SENTENCE_SPLIT_RE = re.compile(r"[.!?]+(?:\s|$)")
+LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s+|\d{1,3}[.)]\s+|#{1,6}\s+|\|)")
+TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+
+DISABLE_FILE_RE = re.compile(r"unslopify:disable(?!\S)")
+DISABLE_TYPES_RE = re.compile(r"unslopify:disable=([\w,-]+)")
+DISABLE_LINE_RE = re.compile(r"unslopify:disable-line")
 
 # Tunables. Callers can override via audit_text kwargs.
 MAX_SENTENCE_WORDS = 36
@@ -30,18 +47,56 @@ NGRAM_N = 4
 NGRAM_MAX_REPEATS = 1
 
 
-def _strip_code_blocks(lines: list[str]) -> list[str]:
-    """Blank out fenced code blocks; audit prose, not code. Markdown link
-    targets and bare URLs are dropped too (link text stays), so badge
-    rows and reference lists do not read as repeated prose."""
+def _scaled(threshold: int, words: int) -> int:
+    """A soft threshold is per 1,000 words, floored at its base value."""
+    return max(threshold, math.ceil(threshold * words / 1000))
+
+
+def _ngram_allowance(words: int) -> int:
+    """Occurrences of one 4-gram tolerated before it reads as a stamp."""
+    return max(NGRAM_MAX_REPEATS, 1 + words // 1500)
+
+
+def _pragmas(lines: list[str]) -> tuple[bool, set[str], set[int]]:
+    """Returns (skip_file, disabled_ids, disabled_lines). Runs on
+    structure-stripped lines, so a pragma quoted in a code fence is
+    documentation, not an instruction."""
+    disabled: set[str] = set()
+    disabled_lines: set[int] = set()
+    skip = False
+    for i, line in enumerate(lines, start=1):
+        if DISABLE_LINE_RE.search(line):
+            disabled_lines.add(i)
+            continue
+        m = DISABLE_TYPES_RE.search(line)
+        if m:
+            disabled.update(x.strip() for x in m.group(1).split(",") if x.strip())
+        elif DISABLE_FILE_RE.search(line):
+            skip = True
+    return skip, disabled, disabled_lines
+
+
+def _strip_structure(lines: list[str]) -> list[str]:
+    """Blank out fenced code, YAML frontmatter, and table rows; drop bare
+    URLs and markdown link targets (link text stays). Prose only."""
     out: list[str] = []
     in_fence = False
-    for line in lines:
+    in_frontmatter = False
+    for i, line in enumerate(lines):
+        if i == 0 and line.strip() == "---":
+            in_frontmatter = True
+            out.append("")
+            continue
+        if in_frontmatter:
+            out.append("")
+            if line.strip() in ("---", "..."):
+                in_frontmatter = False
+            continue
         if FENCE_RE.match(line.strip()):
             in_fence = not in_fence
             out.append("")
             continue
-        if in_fence:
+        if in_fence or TABLE_ROW_RE.match(line):
             out.append("")
             continue
         line = MD_LINK_TARGET_RE.sub(r"\1", line)
@@ -65,20 +120,31 @@ def _ngram_counts(text: str, n: int) -> dict[str, int]:
 
 def _paragraphs(lines: list[str]) -> list[tuple[int, str]]:
     """Group lines into (start_line, joined_text) paragraphs so patterns
-    can match across hard-wrapped lines."""
+    can match across hard wraps. Headings and list items are their own
+    paragraphs, so eight bullets never merge into one fake sentence."""
     paras: list[tuple[int, str]] = []
     start = 0
     buf: list[str] = []
-    for i, line in enumerate(lines, start=1):
-        if line.strip():
-            if not buf:
-                start = i
-            buf.append(line.strip())
-        elif buf:
+
+    def flush() -> None:
+        nonlocal buf
+        if buf:
             paras.append((start, " ".join(buf)))
             buf = []
-    if buf:
-        paras.append((start, " ".join(buf)))
+
+    for i, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            continue
+        if LIST_ITEM_RE.match(line):
+            flush()
+            paras.append((i, stripped))
+            continue
+        if not buf:
+            start = i
+        buf.append(stripped)
+    flush()
     return paras
 
 
@@ -96,18 +162,26 @@ def _make_finding(t, lineno: int, span: str, context: str) -> Finding:
     )
 
 
-def _type_findings(lines: list[str], ignore_quoted: bool) -> list[Finding]:
+def _type_findings(
+    lines: list[str],
+    ignore_quoted: bool,
+    disabled: set[str],
+    disabled_lines: set[int],
+) -> list[Finding]:
     findings: list[Finding] = []
     line_keys: set[tuple[str, str]] = set()
+    types = [t for t in TYPES if t.id not in disabled]
 
     def clean(haystack: str) -> str:
         return QUOTED_RE.sub(" ", haystack) if ignore_quoted else haystack
 
     for lineno, line in enumerate(lines, start=1):
+        if lineno in disabled_lines:
+            continue
         haystack = clean(line)
         if not haystack.strip():
             continue
-        for t in TYPES:
+        for t in types:
             for pat in t.patterns:
                 for m in pat.finditer(haystack):
                     line_keys.add((t.id, m.group(0).lower()))
@@ -117,8 +191,10 @@ def _type_findings(lines: list[str], ignore_quoted: bool) -> list[Finding]:
     # wraps. Only spans the line pass never saw are added, so nothing is
     # double-counted.
     for start, para in _paragraphs(lines):
+        if start in disabled_lines:
+            continue
         haystack = clean(para)
-        for t in TYPES:
+        for t in types:
             for pat in t.patterns:
                 for m in pat.finditer(haystack):
                     if (t.id, m.group(0).lower()) in line_keys:
@@ -129,10 +205,20 @@ def _type_findings(lines: list[str], ignore_quoted: bool) -> list[Finding]:
     return findings
 
 
-def _mechanics(lines: list[str], text: str, max_sentence_words: int) -> list[MechanicsFinding]:
+def _mechanics(
+    lines: list[str],
+    text: str,
+    max_sentence_words: int,
+    disabled: set[str],
+    disabled_lines: set[int],
+) -> list[MechanicsFinding]:
     mech: list[MechanicsFinding] = []
+    words = len(WORD_RE.findall(text))
+
     for lineno, line in enumerate(lines, start=1):
-        if EM_DASH in line or EN_DASH in line:
+        if lineno in disabled_lines:
+            continue
+        if "dash" not in disabled and (EM_DASH in line or EN_DASH in line):
             mech.append(
                 MechanicsFinding(
                     check="dash",
@@ -140,7 +226,7 @@ def _mechanics(lines: list[str], text: str, max_sentence_words: int) -> list[Mec
                     detail="em or en dash; use a comma, colon, or a new sentence",
                 )
             )
-        if any(c in line for c in CURLY):
+        if "curly-quotes" not in disabled and any(c in line for c in CURLY):
             mech.append(
                 MechanicsFinding(
                     check="curly-quotes",
@@ -152,22 +238,29 @@ def _mechanics(lines: list[str], text: str, max_sentence_words: int) -> list[Mec
     # Long sentences (feeds the "verbosity" soft type). Measured over
     # joined paragraphs, not raw lines, so hard-wrapped prose cannot hide
     # a long sentence across line breaks.
-    for start, para in _paragraphs(lines):
-        for sent in SENTENCE_SPLIT_RE.split(para):
-            n = len(WORD_RE.findall(sent))
-            if n > max_sentence_words:
-                mech.append(
-                    MechanicsFinding(
-                        check="sentence-length",
-                        line=start,
-                        detail=f"{n} words in one sentence (cap {max_sentence_words})",
+    if "sentence-length" not in disabled:
+        for start, para in _paragraphs(lines):
+            if start in disabled_lines or LIST_ITEM_RE.match(para):
+                continue
+            for sent in SENTENCE_SPLIT_RE.split(para):
+                n = len(WORD_RE.findall(sent))
+                if n > max_sentence_words:
+                    mech.append(
+                        MechanicsFinding(
+                            check="sentence-length",
+                            line=start,
+                            detail=f"{n} words in one sentence (cap {max_sentence_words})",
+                        )
                     )
-                )
 
     # Semicolon density (feeds "staged-punctuation").
-    words = len(WORD_RE.findall(text))
     semis = text.count(";")
-    if words and semis / words * 100 > SEMICOLONS_PER_100_WORDS and semis >= 2:
+    if (
+        "semicolon-density" not in disabled
+        and words
+        and semis / words * 100 > SEMICOLONS_PER_100_WORDS
+        and semis >= 2
+    ):
         mech.append(
             MechanicsFinding(
                 check="semicolon-density",
@@ -176,21 +269,27 @@ def _mechanics(lines: list[str], text: str, max_sentence_words: int) -> list[Mec
             )
         )
 
-    # Repeated n-grams inside the same document.
-    for gram, count in sorted(_ngram_counts(text, NGRAM_N).items()):
-        if count > NGRAM_MAX_REPEATS:
-            mech.append(
-                MechanicsFinding(
-                    check="repeated-ngram",
-                    line=0,
-                    detail=f"{count}x {gram!r} ({NGRAM_N}-word phrase repeats)",
+    # Repeated n-grams inside the same document, with a length-scaled
+    # allowance so long reports are not failed for normal recurrence.
+    if "repeated-ngram" not in disabled:
+        allowance = _ngram_allowance(words)
+        for gram, count in sorted(_ngram_counts(text, NGRAM_N).items()):
+            if count > allowance:
+                mech.append(
+                    MechanicsFinding(
+                        check="repeated-ngram",
+                        line=0,
+                        detail=(
+                            f"{count}x {gram!r} ({NGRAM_N}-word phrase repeats; "
+                            f"allowance {allowance} at {words} words)"
+                        ),
+                    )
                 )
-            )
     return mech
 
 
 def _verdict(
-    findings: list[Finding], mech: list[MechanicsFinding]
+    findings: list[Finding], mech: list[MechanicsFinding], words: int
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
 
@@ -214,8 +313,11 @@ def _verdict(
         )
     for type_id, count in sorted(soft_counts.items()):
         t = by_id[type_id]
-        if count >= t.threshold:
-            reasons.append(f"{t.name}: {count} hits (threshold {t.threshold})")
+        limit = _scaled(t.threshold, words)
+        if count >= limit:
+            reasons.append(
+                f"{t.name}: {count} hits (threshold {limit} at {words} words)"
+            )
 
     for m in mech:
         if m.check in ("dash", "curly-quotes"):
@@ -231,19 +333,33 @@ def audit_text(
     source: str | None = None,
     ignore_quoted: bool = False,
     max_sentence_words: int = MAX_SENTENCE_WORDS,
+    disable: set[str] | None = None,
 ) -> Audit:
     """Audit a draft and return a full report.
 
     ignore_quoted skips text inside double quotes, for documents that
-    quote bad writing on purpose (reviews, style guides).
+    quote bad writing on purpose (reviews, style guides). ``disable``
+    turns off type ids or mechanics checks; in-file pragmas add to it.
     """
     raw_lines = text.splitlines() or [""]
-    lines = _strip_code_blocks(raw_lines)
-    prose = "\n".join(lines)
+    lines = _strip_structure(raw_lines)
+    skip, disabled, disabled_lines = _pragmas(lines)
+    if disable:
+        disabled |= disable
+    if skip:
+        return Audit(
+            source=source,
+            word_count=len(WORD_RE.findall(text)),
+            verdict="pass",
+            fail_reasons=[],
+        )
 
-    findings = _type_findings(lines, ignore_quoted)
-    mech = _mechanics(lines, prose, max_sentence_words)
-    verdict, reasons = _verdict(findings, mech)
+    prose = "\n".join(lines)
+    words = len(WORD_RE.findall(prose))
+
+    findings = _type_findings(lines, ignore_quoted, disabled, disabled_lines)
+    mech = _mechanics(lines, prose, max_sentence_words, disabled, disabled_lines)
+    verdict, reasons = _verdict(findings, mech, words)
 
     counts_by_type: dict[str, int] = {}
     counts_by_category: dict[str, int] = {}
@@ -257,7 +373,7 @@ def audit_text(
         mechanics=mech,
         counts_by_type=counts_by_type,
         counts_by_category=counts_by_category,
-        word_count=len(WORD_RE.findall(prose)),
+        word_count=words,
         verdict=verdict,
         fail_reasons=reasons,
     )

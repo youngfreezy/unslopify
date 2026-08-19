@@ -17,9 +17,15 @@ Exit codes: 0 pass, 1 findings in any target, 2 usage or IO error.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import os
 import sys
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # 3.10
+    tomllib = None
 
 from . import __version__
 from .audit import audit_text
@@ -29,6 +35,29 @@ from .rewrite import build_brief, mechanical_rewrite
 from .rubric import CATEGORIES, TYPES
 
 TEXT_SUFFIXES = {".md", ".markdown", ".txt", ".rst"}
+
+
+def _load_config() -> dict:
+    """[tool.unslopify] from the nearest pyproject.toml at or above cwd.
+    Keys: disable (list of type ids / checks), exclude (glob list),
+    max-sentence-words (int)."""
+    if tomllib is None:
+        return {}
+    d = Path.cwd()
+    for parent in [d, *d.parents]:
+        pp = parent / "pyproject.toml"
+        if pp.is_file():
+            try:
+                data = tomllib.loads(pp.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError):
+                return {}
+            return data.get("tool", {}).get("unslopify", {}) or {}
+    return {}
+
+
+def _excluded(path: Path, patterns: list[str]) -> bool:
+    s = str(path)
+    return any(fnmatch.fnmatch(s, pat) or fnmatch.fnmatch(path.name, pat) for pat in patterns)
 
 
 def _color_enabled() -> bool:
@@ -48,7 +77,7 @@ class _Style:
         self.off = "\033[0m" if on else ""
 
 
-def _expand_targets(targets: list[str]) -> tuple[list[Path], list[str]]:
+def _expand_targets(targets: list[str], exclude: list[str]) -> tuple[list[Path], list[str]]:
     """Resolve files and directories to a file list. Returns (files, errors)."""
     files: list[Path] = []
     errors: list[str] = []
@@ -58,7 +87,11 @@ def _expand_targets(targets: list[str]) -> tuple[list[Path], list[str]]:
             files.append(p)
         elif p.is_dir():
             found = sorted(
-                q for q in p.rglob("*") if q.is_file() and q.suffix.lower() in TEXT_SUFFIXES
+                q
+                for q in p.rglob("*")
+                if q.is_file()
+                and q.suffix.lower() in TEXT_SUFFIXES
+                and not _excluded(q, exclude)
             )
             if found:
                 files.extend(found)
@@ -66,7 +99,7 @@ def _expand_targets(targets: list[str]) -> tuple[list[Path], list[str]]:
                 errors.append(f"{t}: directory has no text files ({'/'.join(sorted(TEXT_SUFFIXES))})")
         else:
             errors.append(f"{t}: no such file or directory")
-    return files, errors
+    return [f for f in files if not _excluded(f, exclude)], errors
 
 
 def _print_types() -> None:
@@ -110,7 +143,15 @@ def _print_human(audit, bank_fails: list[str], style: _Style) -> None:
     )
 
 
-def _run_one(path: Path | None, text: str, source: str, args, style: _Style) -> int:
+def _run_one(
+    path: Path | None,
+    text: str,
+    source: str,
+    args,
+    style: _Style,
+    disable: set[str],
+    json_out: list | None = None,
+) -> int:
     """Audit or fix one input. Returns 0 pass, 1 findings."""
     draft = Draft(text=text, source=source)
 
@@ -133,6 +174,8 @@ def _run_one(path: Path | None, text: str, source: str, args, style: _Style) -> 
                 "need a real rewrite; run --brief for instructions",
                 file=sys.stderr,
             )
+            # a fix that leaves problems is not a pass; gates need to see it
+            return 1
         return 0
 
     audit = audit_text(
@@ -140,6 +183,7 @@ def _run_one(path: Path | None, text: str, source: str, args, style: _Style) -> 
         source=source,
         ignore_quoted=args.ignore_quotes,
         max_sentence_words=args.max_sentence_words,
+        disable=disable,
     )
     bank_fails = cross_check(text, doc_id=args.doc_id) if args.bank else []
     if bank_fails:
@@ -147,9 +191,14 @@ def _run_one(path: Path | None, text: str, source: str, args, style: _Style) -> 
         audit.fail_reasons.extend(bank_fails)
 
     if args.brief:
+        if path is not None:
+            print(f"# {source}")
         print(build_brief(audit))
     elif args.json:
-        print(audit.model_dump_json(indent=2))
+        if json_out is None:
+            print(audit.model_dump_json(indent=2))
+        else:
+            json_out.append(audit)
     else:
         _print_human(audit, bank_fails, style)
 
@@ -188,13 +237,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     style = _Style(_color_enabled() and not args.json and not args.brief)
 
-    targets = list(args.targets)
+    config = _load_config()
+    disable = set(config.get("disable", []))
+    exclude = [str(x) for x in config.get("exclude", [])]
+    if args.max_sentence_words == 36 and "max-sentence-words" in config:
+        args.max_sentence_words = int(config["max-sentence-words"])
 
-    if targets and targets[0] == "types":
+    targets = list(args.targets)
+    if args.write and not args.fix:
+        print("error: -w/--write requires --fix", file=sys.stderr)
+        return 2
+
+    # subcommands only when no file of that name exists, so a repo
+    # containing a file literally named 'types' cannot shadow the audit
+    if targets and targets[0] == "types" and not Path("types").exists():
         _print_types()
         return 0
 
-    if targets and targets[0] == "commit":
+    if targets and targets[0] == "commit" and not Path("commit").exists():
         if len(targets) < 2 or not args.doc_id:
             print("usage: unslopify commit FILE --id DOC_ID", file=sys.stderr)
             return 2
@@ -212,25 +272,30 @@ def main(argv: list[str] | None = None) -> int:
     # stdin: explicit '-', or piped input with no targets
     use_stdin = targets == ["-"] or (not targets and not sys.stdin.isatty())
     if use_stdin:
-        return _run_one(None, sys.stdin.read(), "stdin", args, style)
+        return _run_one(None, sys.stdin.read(), "stdin", args, style, disable)
 
     if not targets:
         parser.print_help()
         return 2
 
-    files, errors = _expand_targets(targets)
+    files, errors = _expand_targets(targets, exclude)
     for e in errors:
         print(f"error: {e}", file=sys.stderr)
     if errors:
         return 2
-    if args.write and not args.fix:
-        print("error: -w/--write requires --fix", file=sys.stderr)
-        return 2
 
+    json_out: list | None = [] if args.json and len(files) > 1 else None
     worst = 0
     for p in files:
-        rc = _run_one(p, p.read_text(encoding="utf-8"), str(p), args, style)
+        try:
+            text = p.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            print(f"error: {p}: not valid UTF-8", file=sys.stderr)
+            return 2
+        rc = _run_one(p, text, str(p), args, style, disable, json_out)
         worst = max(worst, rc)
+    if json_out is not None:
+        print("[" + ",\n".join(a.model_dump_json(indent=2) for a in json_out) + "]")
     if len(files) > 1 and not args.json and not args.brief and not args.fix:
         word = "pass" if worst == 0 else "fail"
         print(f"{len(files)} files checked: {word}")

@@ -20,8 +20,8 @@ them with a new house style. The pipeline below does both.
 
 Run `unslopify types` for the rubric: four categories (formula, substance,
 wording, structure), each with named types, one-line definitions, and
-examples. The CLI is installed with `pip install unslopify` or run from a
-checkout with `python -m unslopify.cli`.
+examples. The CLI comes from PyPI (`pip install unslopify`) or runs from a
+checkout as `python -m unslopify.cli`.
 
 ## Mode 1: always-on
 
@@ -60,6 +60,17 @@ file in place unless asked.
 
 Every gate either passes or sends you back to the rewrite step. Do not
 skip a gate because the draft "looks clean".
+
+0. **Preflight.** Run `unslopify --version`. If the command is
+   missing, install it from PyPI, and if you cannot install, STOP and
+   tell the user: "the unslopify CLI is not available, so the audit and
+   uniqueness gates cannot run; install it with pip install unslopify".
+   Never substitute your own judgment for the CLI gates and report the
+   pipeline as run. Declare the other degraded modes too, rather than
+   hiding them. If your harness cannot spawn a fresh-context subagent,
+   say so and skip step 5 explicitly. If the environment is ephemeral
+   with no persistent home directory, say the phrase bank has no memory
+   between sessions.
 
 1. **Audit.** Save the draft as `DRAFT.md` and run:
 

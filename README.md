@@ -88,7 +88,29 @@ unslopify types                 # print the rubric
 ```
 
 Color respects `NO_COLOR` and `FORCE_COLOR`. Exit codes are stable:
-0 pass, 1 findings in any file, 2 usage or IO error.
+0 pass, 1 findings in any file, 2 usage or IO error. Soft-type
+thresholds and the repeated-phrase allowance scale with document
+length, so long reports are judged at their own density, not a memo's.
+
+## Suppression and config
+
+Inline, in any file:
+
+```text
+<!-- unslopify:disable -->                    skip this file
+<!-- unslopify:disable=fake-authority,dash -->  disable listed types or checks
+some sentence  <!-- unslopify:disable-line -->  suppress this line
+```
+
+Pragmas inside code fences are documentation and do nothing. Project-wide,
+in `pyproject.toml`:
+
+```toml
+[tool.unslopify]
+disable = ["promo-tone"]
+exclude = ["CHANGELOG.md", "vendored/*"]
+max-sentence-words = 40
+```
 
 ## CI gate
 
@@ -97,7 +119,7 @@ Pre-commit:
 ```yaml
 repos:
   - repo: https://github.com/youngfreezy/unslopify
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: unslopify
 ```
@@ -105,7 +127,7 @@ repos:
 GitHub Actions:
 
 ```yaml
-- uses: youngfreezy/unslopify@v0.2.0
+- uses: youngfreezy/unslopify@v0.3.0
   with:
     paths: docs/ README.md
 ```
@@ -186,6 +208,24 @@ skill's writing rules apply to every outgoing message.
 - Voice is preserved, not replaced. The optional `VoiceProfile` measures
   the author's sentence lengths, contraction rate, and first-person
   rate, and the rewrite aims at those numbers.
+
+## Detection
+
+Calibration answers what the audit flags in old human prose; detection
+answers whether it separates model output from human writing at all.
+`scripts/detection.py` runs the named-type verdict (mechanics disabled)
+over `fixtures/llm/`, eight genuine LLM-written samples labeled as such
+in each file, against the five pre-LLM human sources:
+
+```text
+detection rate: 8/8 LLM samples flagged
+false-positive rate: 0/5 human sources flagged
+```
+
+Add your own labeled samples to `fixtures/llm/` and `fixtures/human/`
+and rerun it on your material. The fixtures are default-assistant
+register; adversarially plain model output will beat a static rubric,
+which is why the agent skill adds the fresh-context judge on top.
 
 ## Calibration on pre-LLM prose
 

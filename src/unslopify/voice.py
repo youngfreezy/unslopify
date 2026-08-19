@@ -13,8 +13,13 @@ from .models import VoiceProfile
 
 _WORD_RE = re.compile(r"[A-Za-z0-9']+")
 _SENT_RE = re.compile(r"[.!?]+(?:\s|$)")
+# Possessive 's is not a contraction; only pronoun/there 's forms count.
 _CONTRACTION_RE = re.compile(
-    r"\b\w+'(?:s|t|re|ve|ll|d|m)\b", re.IGNORECASE
+    r"\b\w+n't\b"
+    r"|\b\w+'(?:re|ve|ll|m)\b"
+    r"|\b(?:it|that|there|here|what|who|let|he|she)'s\b"
+    r"|\b\w+'d\b",
+    re.IGNORECASE,
 )
 _FIRST_PERSON_RE = re.compile(r"\b(?:i|we|i'm|i've|i'll|we're|we've)\b", re.IGNORECASE)
 

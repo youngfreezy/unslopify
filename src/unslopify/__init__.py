@@ -1,6 +1,6 @@
 """unslopify: audit and rewrite text to remove AI-writing patterns."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .audit import audit_draft, audit_text
 from .models import (
