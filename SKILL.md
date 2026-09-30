@@ -67,8 +67,9 @@ skip a gate because the draft "looks clean".
    uniqueness gates cannot run; install it with pip install unslopify".
    Never substitute your own judgment for the CLI gates and report the
    pipeline as run. Declare the other degraded modes too, rather than
-   hiding them. If your harness cannot spawn a fresh-context subagent,
-   say so and skip step 5 explicitly. If the environment is ephemeral
+   hiding them. Step 5 uses a separate CLI process; if no judge CLI or
+   fresh-context subagent is available, declare that step skipped.
+   If the environment is ephemeral
    with no persistent home directory, say the phrase bank has no memory
    between sessions.
 
@@ -123,12 +124,29 @@ skip a gate because the draft "looks clean".
    does any 4-word phrase repeated inside this draft. Rephrase the
    flagged spans in different words, not reshuffled ones.
 
-5. **Fresh judge.** Spawn a subagent with no access to your working
-   notes. Give it only the rewritten text and this instruction: "Quote
-   every span that reads as AI-generated, stock, or evasive, and say
-   why. Approve only if nothing needs quoting." Return its verdict as a
-   JudgeVerdict (approved, reasons, quoted_spans). If it quotes anything,
-   go back to step 2 with its quotes as new findings.
+5. **Fresh judge.** Run the harness-neutral judge script from this
+   skill's directory:
+
+   ```
+   python3 <skill-dir>/scripts/fresh_judge.py DRAFT.md
+   ```
+
+   It launches a separate headless agent-CLI process (first found of
+   `UNSLOPIFY_JUDGE_CMD`, `claude -p --model claude-opus-5-5`, `codex exec -m gpt-6.1-sol`, `cursor-agent -p`).
+   The default Claude judge uses Opus 5.5 (`claude-opus-5-5`), and the
+   Codex fallback uses GPT-6.1 Sol (`gpt-6.1-sol`). Explicit command
+   overrides take precedence. The judge sees only the rewritten text,
+   never your working notes. It prints a JudgeVerdict JSON (approved, reasons, quoted_spans). Exit 0
+   is approved. Exit 1 means spans were quoted: go back to step 2 with
+   those quotes as new findings. Exit 2 means no judge CLI exists on
+   this machine; only then fall back to your harness's own
+   fresh-context subagent with the same instruction ("Quote every span
+   that reads as AI-generated, stock, or evasive, and say why. Approve
+   only if nothing needs quoting."), and if the harness cannot spawn
+   one either, declare step 5 skipped. Exit 3 means the judge produced
+   unusable output; rerun it once before falling back. Never judge the
+   text in your own context: a judge that watched you rewrite will
+   approve what you approved.
 
 6. **Final gate.** `unslopify DRAFT.md` must print PASS. Then, if the
    user keeps a phrase bank, commit the finished document so future
