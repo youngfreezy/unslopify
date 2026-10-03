@@ -235,7 +235,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--brief", action="store_true", help="print rewrite instructions instead of findings")
     parser.add_argument("--bank", action="store_true", help="also check the cross-document phrase bank")
     parser.add_argument("--id", dest="doc_id", help="document id (for commit, or to skip self-overlap with --bank)")
-    parser.add_argument("--ignore-quotes", action="store_true", help="skip text inside double quotes")
+    parser.add_argument(
+        "--ignore-quotes",
+        action="store_true",
+        help="skip text inside double quotes (does not skip em or en dashes)",
+    )
     parser.add_argument(
         "--level",
         choices=["strict", "standard", "relaxed"],

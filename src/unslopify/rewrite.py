@@ -60,15 +60,34 @@ def _unmask_quotes(line: str, saved: list[str]) -> str:
     return line
 
 
-def _fix_line(line: str, policy: StylePolicy) -> tuple[str, list[str]]:
-    """Apply safe rules to one line. Returns (fixed, rule_ids_fired)."""
-    work, saved = _mask_quotes(line) if policy.preserve_quotes else (line, [])
-    fired: list[str] = []
+DASH_RULE_IDS = frozenset({"dash-to-comma", "endash-to-hyphen"})
+
+
+def _apply_rules(
+    work: str, fired: list[str], only: frozenset[str] | None = None
+) -> str:
     for rule_id, pat, repl in SAFE_RULES:
+        if only is not None and rule_id not in only:
+            continue
+        if only is None and rule_id in DASH_RULE_IDS:
+            continue
         new = pat.sub(repl, work)
         if new != work:
             fired.append(rule_id)
             work = new
+    return work
+
+
+def _fix_line(line: str, policy: StylePolicy) -> tuple[str, list[str]]:
+    """Apply safe rules to one line. Returns (fixed, rule_ids_fired).
+
+    Dash substitutions run on the full line first. Quoted spans cannot
+    keep an em or en dash; that check is not waivable.
+    """
+    fired: list[str] = []
+    work = _apply_rules(line, fired, only=DASH_RULE_IDS)
+    work, saved = _mask_quotes(work) if policy.preserve_quotes else (work, [])
+    work = _apply_rules(work, fired)
     if fired:
         work = _MULTISPACE.sub(" ", work)
         work = _SPACE_PUNCT.sub(r"\1", work)

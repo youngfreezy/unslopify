@@ -5,10 +5,14 @@ always produces the same report. The agent skill layers judgment on top;
 this module is the floor it stands on.
 
 Suppression:
-- ``unslopify:disable`` anywhere in a file skips the whole file.
+- ``unslopify:disable`` anywhere in a file skips the whole file,
+  except the dash check.
 - ``unslopify:disable=id1,id2`` disables those type ids or mechanics
-  checks for the file.
-- ``unslopify:disable-line`` suppresses every finding on its own line.
+  checks for the file. ``dash`` in that list is ignored.
+- ``unslopify:disable-line`` suppresses every finding on its own line
+  except em and en dashes.
+- Em and en dashes always fail. ``--ignore-quotes``, file skip, and
+  config ``disable = ["dash"]`` do not waive them.
 
 Soft-type thresholds and the repeated-phrase allowance scale with
 document length (per 1,000 words), so a long report is not failed for
@@ -26,6 +30,9 @@ from .rubric import TYPES, SlopType
 
 EM_DASH = "—"
 EN_DASH = "–"
+# Long dashes cannot be suppressed. A quoted prompt, disable pragma,
+# disable-line, file skip, or config disable=dash still fails.
+HARD_MECHANICS = frozenset({"dash"})
 CURLY = "‘’“”"
 
 FENCE_RE = re.compile(r"^(```|~~~)")
@@ -79,7 +86,23 @@ def _pragmas(lines: list[str]) -> tuple[bool, set[str], set[int]]:
             disabled.update(x.strip() for x in m.group(1).split(",") if x.strip())
         elif DISABLE_FILE_RE.search(line):
             skip = True
+    disabled -= HARD_MECHANICS
     return skip, disabled, disabled_lines
+
+
+def _dash_findings(lines: list[str]) -> list[MechanicsFinding]:
+    """Scan raw lines. Long dashes fail even in quotes, fences, and skipped files."""
+    mech: list[MechanicsFinding] = []
+    for lineno, line in enumerate(lines, start=1):
+        if EM_DASH in line or EN_DASH in line:
+            mech.append(
+                MechanicsFinding(
+                    check="dash",
+                    line=lineno,
+                    detail="em or en dash; use a comma, colon, or a new sentence",
+                )
+            )
+    return mech
 
 
 def _strip_structure(lines: list[str]) -> list[str]:
@@ -224,14 +247,6 @@ def _mechanics(
     for lineno, line in enumerate(lines, start=1):
         if lineno in disabled_lines:
             continue
-        if "dash" not in disabled and (EM_DASH in line or EN_DASH in line):
-            mech.append(
-                MechanicsFinding(
-                    check="dash",
-                    line=lineno,
-                    detail="em or en dash; use a comma, colon, or a new sentence",
-                )
-            )
         if "curly-quotes" not in disabled and any(c in line for c in CURLY):
             mech.append(
                 MechanicsFinding(
@@ -406,15 +421,27 @@ def audit_text(
     """Audit a draft and return a full report.
 
     ignore_quoted skips text inside double quotes, for documents that
-    quote bad writing on purpose (reviews, style guides). ``disable``
-    turns off type ids or mechanics checks; in-file pragmas add to it.
+    quote bad writing on purpose (reviews, style guides). It does not
+    skip em or en dashes. ``disable`` turns off type ids or mechanics
+    checks; in-file pragmas add to it. ``dash`` cannot be disabled.
     """
     raw_lines = text.splitlines() or [""]
     lines = _strip_structure(raw_lines)
     skip, disabled, disabled_lines = _pragmas(lines)
     if disable:
         disabled |= disable
+        disabled -= HARD_MECHANICS
+    dash_mech = _dash_findings(raw_lines)
     if skip:
+        if dash_mech:
+            reasons = [f"line {m.line}: {m.detail}" for m in dash_mech]
+            return Audit(
+                source=source,
+                mechanics=dash_mech,
+                word_count=len(WORD_RE.findall(text)),
+                verdict="fail",
+                fail_reasons=reasons,
+            )
         return Audit(
             source=source,
             word_count=len(WORD_RE.findall(text)),
@@ -426,7 +453,7 @@ def audit_text(
     words = len(WORD_RE.findall(prose))
 
     findings = _type_findings(lines, ignore_quoted, disabled, disabled_lines)
-    mech = _mechanics(lines, prose, max_sentence_words, disabled, disabled_lines)
+    mech = dash_mech + _mechanics(lines, prose, max_sentence_words, disabled, disabled_lines)
     verdict, reasons = _verdict(findings, mech, words, LEVELS.get(level, 1.0))
 
     counts_by_type: dict[str, int] = {}

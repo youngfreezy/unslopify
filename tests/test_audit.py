@@ -48,6 +48,28 @@ def test_dashes_and_curly_quotes_fail():
     assert report.verdict == "fail"
 
 
+def test_dash_cannot_be_disabled():
+    text = "The fix—which shipped—works.\n"
+    assert audit_text(text, disable={"dash"}).verdict == "fail"
+    pragma = "<!-- unslopify:disable=dash -->\nThe fix—which shipped—works.\n"
+    assert audit_text(pragma).verdict == "fail"
+    by_line = "The fix—which shipped—works. <!-- unslopify:disable-line -->\n"
+    assert audit_text(by_line).verdict == "fail"
+    skipped = "<!-- unslopify:disable -->\nThe fix—which shipped—works.\n"
+    assert audit_text(skipped).verdict == "fail"
+    quoted = 'A said "Good idea \u2014 look at internals".\n'
+    assert audit_text(quoted, ignore_quoted=True).verdict == "fail"
+    fenced = "Plain body.\n```\nThe fix—shipped.\n```\n"
+    assert audit_text(fenced).verdict == "fail"
+
+
+def test_quoted_dash_is_rewritten():
+    text = 'The memo says "ship—fast" and is otherwise clean.\n'
+    fixed, events = apply_safe_fixes(text)
+    assert "—" not in fixed
+    assert any(e.rule_id == "dash-to-comma" for e in events)
+
+
 def test_long_sentence_feeds_verbosity():
     words = " ".join(["word"] * 40) + "."
     report = audit_text(words + " " + words)
@@ -382,6 +404,21 @@ def test_cli_config_disable_and_exclude(tmp_path, monkeypatch):
     )
     assert r.returncode == 0
     assert "skip-me" not in r.stdout
+
+
+def test_cli_config_cannot_disable_dash(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSLOPIFY_HOME", str(tmp_path))
+    (tmp_path / "pyproject.toml").write_text('[tool.unslopify]\ndisable = ["dash"]\n')
+    doc = tmp_path / "doc.md"
+    doc.write_text("The fix\u2014which shipped\u2014works.\n")
+    r = subprocess.run(
+        [sys.executable, "-m", "unslopify.cli", "doc.md"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
+    assert r.returncode == 1
+    assert "dash" in r.stdout
 
 
 def test_noun_stack_detection():

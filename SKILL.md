@@ -49,6 +49,11 @@ documents, commit messages, comments.
 
 These rules are contextual signals, not banned tokens. One isolated
 instance is fine; conspicuous, repeated, or unearned patterns are not.
+Em dashes and en dashes are the exception. They always fail. One
+instance is enough. A quoted prompt is not a waiver. The CLI treats
+``dash`` as a hard mechanic: ``disable=dash``, ``disable-line``, file
+skip, ``--ignore-quotes``, and config ``disable = ["dash"]`` do not
+turn it off.
 
 ## Mode 2: rewrite a draft
 
@@ -67,9 +72,10 @@ skip a gate because the draft "looks clean".
    uniqueness gates cannot run; install it with pip install unslopify".
    Never substitute your own judgment for the CLI gates and report the
    pipeline as run. Declare the other degraded modes too, rather than
-   hiding them. Step 5 uses a separate CLI process; if no judge CLI or
-   fresh-context subagent is available, declare that step skipped.
-   If the environment is ephemeral
+   hiding them. Step 5 runs the judge as a separate CLI process, so it
+   needs no subagent support; only if no judge CLI exists AND your
+   harness cannot spawn a fresh-context subagent, say so and skip
+   step 5 explicitly. If the environment is ephemeral
    with no persistent home directory, say the phrase bank has no memory
    between sessions.
 
@@ -95,7 +101,9 @@ skip a gate because the draft "looks clean".
    - One main point per sentence, with an active subject and verb.
    - Standard capitalization and spelling. Never inject informality,
      slang, or errors to sound human; that is its own tell.
-   - Quoted material and citations are evidence. Preserve them exactly.
+   - Quoted material and citations are evidence. Preserve them exactly,
+     except em dashes and en dashes: those characters cannot stay, even
+     inside a quote. Use an ASCII span or a paraphrase.
    - Say the direct thing instead of a template. If you notice the same
      sentence shape appearing across your rewrites, that shape is a
      house formula and it dies here.

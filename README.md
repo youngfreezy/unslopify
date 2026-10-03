@@ -102,10 +102,15 @@ hard rules are unaffected.
 Inline, in any file:
 
 ```text
-<!-- unslopify:disable -->                    skip this file
-<!-- unslopify:disable=fake-authority,dash -->  disable listed types or checks
-some sentence  <!-- unslopify:disable-line -->  suppress this line
+<!-- unslopify:disable -->                    skip this file (dashes still fail)
+<!-- unslopify:disable=fake-authority -->     disable listed types or checks
+some sentence  <!-- unslopify:disable-line -->  suppress this line (dashes still fail)
 ```
+
+Em and en dashes always fail. `disable=dash`, `disable-line`, file skip,
+`--ignore-quotes`, and config `disable = ["dash"]` do not waive them.
+Rewrite the sentence, or use a comma, colon, hyphen, or ASCII span.
+A quoted prompt is not an exception.
 
 Pragmas inside code fences are documentation and do nothing. Project-wide,
 in `pyproject.toml`:

@@ -63,8 +63,8 @@ class StylePolicy(BaseModel):
     """Typed knobs for the rewrite pass.
 
     The defaults encode plain-language editing: standard capitalization,
-    no injected informality, quotes preserved exactly, and no growth in
-    word count to satisfy a gate.
+    no injected informality, quotes preserved except em and en dashes,
+    and no growth in word count to satisfy a gate.
     """
 
     sentence_word_limit: int = 36
